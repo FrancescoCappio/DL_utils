@@ -22,6 +22,9 @@ def write_list_to_file(filename: str, images: list):
             f.write(img + "\n")
     print("File {} written".format(filename))
 
+def remove_base_path(images: list, base_path: str):
+    return [i.replace(base_path,'') for i in images]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("This script allows to generate a train/validation split of an ImageFolder-like structured dataset.")
 
@@ -64,8 +67,8 @@ if __name__ == "__main__":
         train_images = images[train_mask]
         val_images = images[val_mask]
 
-        write_list_to_file(args.train_split_output, train_images)
-        write_list_to_file(args.val_split_output, val_images)
+        write_list_to_file(args.train_split_output, remove_base_path(train_images, args.input_folder))
+        write_list_to_file(args.val_split_output, remove_base_path(val_images, args.input_folder))
         
         sys.exit(0)
 
@@ -92,6 +95,6 @@ if __name__ == "__main__":
         train_images.extend(cls_images[train_mask].tolist())
     print("Total val images: {}".format(len(val_images)))
 
-    write_list_to_file(args.train_split_output, train_images)
-    write_list_to_file(args.val_split_output, val_images)
+    write_list_to_file(args.train_split_output, remove_base_path(train_images, args.input_folder))
+    write_list_to_file(args.val_split_output, remove_base_path(val_images, args.input_folder))
 
