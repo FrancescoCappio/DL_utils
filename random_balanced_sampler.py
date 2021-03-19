@@ -1,17 +1,17 @@
 import argparse
 import random 
+from itertools import cycle
 
 
 
-
-def generate_list(n_classes, sources_per_class, batch_p, lengths_dict):
+def generate_list(n_classes, sources_per_class, batch_p, lengths_dict, ids_dict):
     """
     n_classes -> total number of classes
     sources_per_class -> dict with {class_id : number of sources containing this class}
     batch_p -> number of samples for each class in a block
     lengths_dict -> number of samples in each class. Ex class 0 has K=sources_per_class[0] sources. lengths[0] = [len_class_0_source_1, ..., len_class_0_source_K] 
     ids_dict -> each sample has a unique identifier. This identifiers are those that should be inserted in the final list. This is a dict that contains for 
-    each class and each souce 
+    each class and each souce a list of ids
 
     Should return a list which can be divided in blocks of size batch_p. Each block contains batch_p 
     elements of the same class. Subsequent blocks refer to different classes. 
@@ -33,7 +33,7 @@ def generate_list(n_classes, sources_per_class, batch_p, lengths_dict):
      - sources_per_class = {0:5,1:5,2:5,3:5,4:5,5:5} # -> each class has 5 sources
      - batch_p = 3
      - lengths_dict = {0:[8,8,8,8,8],1:[8,8,8,8,8],2:[8,8,8,8,8],3:[8,8,8,8,8],4:[8,8,8,8,8],5:[8,8,8,8,8]
-     - indices_dict = {}
+     - ids_dict = {}
 
     OUTPUT: [
     D0C0E0, D1C0E0, D2C0E0,
@@ -90,37 +90,31 @@ def generate_list(n_classes, sources_per_class, batch_p, lengths_dict):
     When resampling we should keep the alternating strategy for sources.
 
     """
+    
+    # compute desired length 
+    cls_sizes = [max(lengths_dict[cls_id])*sources_per_class[cls_id] for cls_id in range(n_classes)]
+    
+    max_size = max(cls_sizes)
+
+    desired_class_len = max_size
+
     queues = {}
 
     for cls_id in range(n_classes):
 
-        # first create a queue for each source
-        src_qs = {}
+        n_sources = sources_per_class[cls_id]
+        ids_this_class = ids_dict[cls_id]
+        len_sources = lengths_dict[cls_id]
+        queue_this_class = []
 
-        sources_this_class =sources_per_class[cls_id]
+        src_iter = iter(cycle(range(n_sources)))
+        while len(queue_this_class) < desired_class_len:
+            src = next(src_iter)
+            ids_this_src = ids_this_class[src]
+            len_this_src = len_sources[src]
+            queue_this_class.append(f"D{src}E{ids_this_src[random.randrange(len_this_src)]}")
 
-        for src in range(sources_this_class):
-            # elements in this source:
-            n_elem = lengths_dict[cls_id][src]
-            src_qs[src] = [f'E{idx}' for idx in range(n_elem)]
-            # now check if we should sample again to rebalance with larger source
-            max_elem = max(lengths_dict[cls_id])
-            while n_elem < max_elem:
-                src_qs[source].append(random.randrange(n_elem))
-                max_elem -= 1
-
-        # now we put together sources 
-        list_class = []
-        while True: 
-            found = False
-            for src in range(sources_this_class):
-                queue_this_source = src_qs[src]
-                if len(queue_this_source) > 0:
-                    found = True
-                    list_class.append(f'D{src}{queue_this_source.pop(0)}')
-            if not found:
-                break
-        queues[cls_id] = list_class
+        queues[cls_id] = queue_this_class
 
     out = []
 
@@ -137,13 +131,23 @@ def generate_list(n_classes, sources_per_class, batch_p, lengths_dict):
     return out
     
 
+n_classes = 6
 batch_p = 3
 #sources_per_class = {0:5,1:5,2:5,3:5,4:5,5:5}
 sources_per_class = {0:4,1:5,2:5,3:5,4:5,5:5}
 #lengths_dict = {0:[8,8,8,8,8],1:[8,8,8,8,8],2:[8,8,8,8,8],3:[8,8,8,8,8],4:[8,8,8,8,8],5:[8,8,8,8,8]}
 lengths_dict = {0:[8,8,8,8],1:[8,8,8,8,8],2:[8,8,8,8,8],3:[8,8,8,8,8],4:[8,8,8,8,8],5:[8,8,8,8,8]}
 
-out = generate_list(n_classes=6, sources_per_class = sources_per_class, batch_p = batch_p, lengths_dict = lengths_dict)
+ids_dict = {}
+for cls_id in range(n_classes):
+    src_dict = {}
+    for src in range(sources_per_class[cls_id]):
+        len_src = lengths_dict[cls_id][src]
+        src_dict[src] = list(range(len_src))
+    
+    ids_dict[cls_id] = src_dict
+
+out = generate_list(n_classes=n_classes, sources_per_class = sources_per_class, batch_p = batch_p, lengths_dict = lengths_dict, ids_dict=ids_dict)
 
 
 for idx, el in enumerate(out):
