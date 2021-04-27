@@ -17,73 +17,43 @@ import pdb
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 
 def preprocess_annotation(target):
-        boxes = []
-        gt_classes = []
-        difficult_boxes = []
-        TO_REMOVE = 1
+    boxes = []
+    gt_classes = []
+    difficult_boxes = []
+    TO_REMOVE = 1
 
-        for obj in target.iter("object"):
-            difficult = int(obj.find("difficult").text) == 1
-            if difficult:
-                continue
-            name = obj.find("name").text.lower().strip()
-            bb = obj.find("bndbox")
-            # Make pixel indexes 0-based
-            # Refer to "https://github.com/rbgirshick/py-faster-rcnn/blob/master/lib/datasets/pascal_voc.py#L208-L211"
-            box = [
-                bb.find("xmin").text,
-                bb.find("ymin").text,
-                bb.find("xmax").text,
-                bb.find("ymax").text,
-            ]
-            bndbox = tuple(
-                map(lambda x: x - TO_REMOVE, list(map(int, box)))
-            )
+    for obj in target.iter("object"):
+        difficult = int(obj.find("difficult").text) == 1
+        if difficult:
+            continue
+        name = obj.find("name").text.lower().strip()
+        bb = obj.find("bndbox")
+        # Make pixel indexes 0-based
+        # Refer to "https://github.com/rbgirshick/py-faster-rcnn/blob/master/lib/datasets/pascal_voc.py#L208-L211"
+        box = [
+            bb.find("xmin").text,
+            bb.find("ymin").text,
+            bb.find("xmax").text,
+            bb.find("ymax").text,
+        ]
+        bndbox = tuple(
+            map(lambda x: x - TO_REMOVE, list(map(int, box)))
+        )
 
-            boxes.append(bndbox)
-            gt_classes.append(name)
-            difficult_boxes.append(difficult)
+        boxes.append(bndbox)
+        gt_classes.append(name)
+        difficult_boxes.append(difficult)
 
-        size = target.find("size")
-        im_info = tuple(map(int, (size.find("height").text, size.find("width").text)))
+    size = target.find("size")
+    im_info = tuple(map(int, (size.find("height").text, size.find("width").text)))
 
-        res = {
-            "boxes": torch.tensor(boxes, dtype=torch.float32),
-            "labels": gt_classes,
-            "difficult": torch.tensor(difficult_boxes),
-            "im_info": im_info,
-        }
-        return res
-
-def draw_bbox(image_path, boxes, is_image_file = False):
-    if is_image_file == False:
-        pil_image = Image.open(image_path)
-    else:
-        pil_image = image_path
-    fnt = ImageFont.truetype('arial.ttf', 35)
-    draw = Draw(pil_image)
-    #for box, color, score in zip(boxes, colors, scores):
-    for box in boxes:
-        box = box.to(torch.int64)
-        top_left, bottom_right = box[:2].tolist(), box[2:].tolist()
-
-        draw.rectangle([top_left[0], top_left[1], bottom_right[0], bottom_right[1]], outline=(0,0,0))
-        #draw.rectangle([top_left[0], top_left[1], bottom_right[0], bottom_right[1]], outline=tuple(color), width=15)
-        
-        mtext = "{:.2f}".format(0.8020)
-        left_off=7
-        top_off=5
-        xmin,ymin,xmax,ymax = top_left[0], top_left[1], bottom_right[0], bottom_right[1]
-        #draw.rectangle([xmin, ymin, xmin+100, ymin+40], outline=(0,0,0), width=10)
-        #draw.text((xmin-1+left_off,ymin+top_off), mtext, font=fnt, fill=(0,0,0,128))
-        #draw.text((xmin+left_off,ymin-1+top_off), mtext, font=fnt, fill=(0,0,0,128))
-        #draw.text((xmin+1+left_off,ymin+top_off), mtext, font=fnt, fill=(0,0,0,128))
-        #draw.text((xmin+left_off,ymin+1+top_off), mtext, font=fnt, fill=(0,0,0,128))
-        #draw.text((xmin+left_off,ymin+top_off), mtext, font=fnt, fill=(255,255,255,128))
-        
-    del draw
-
-    return pil_image
+    res = {
+        "boxes": torch.tensor(boxes, dtype=torch.float32),
+        "labels": gt_classes,
+        "difficult": torch.tensor(difficult_boxes),
+        "im_info": im_info,
+    }
+    return res
 
 def boxlist_iou(boxList1, boxList2):
     #INTERSEZIONE
@@ -115,34 +85,6 @@ def boxlist_iou(boxList1, boxList2):
     
     return iou
 
-"""
-anno_path = "D:\Desktop\DATASETS\clipart\Annotations\\"
-imm_path = "D:\Desktop\DATASETS\clipart\JPEGImages\\"
-
-anno_files = listdir(anno_path)
-imm_files = listdir(imm_path)
-
-anno = ET.parse(anno_path+anno_files[0]).getroot()
-
-res = preprocess_annotation(anno)
-print(anno_files[0])
-print(res)
-
-
-box_image = draw_bbox(imm_path + imm_files[0], res["boxes"])
-
-lista_box = [(45,35,106,101)]
-
-new_bbox = torch.tensor(lista_box, dtype=torch.float32)
-
-box_image2 = draw_bbox(box_image, new_bbox, True)
-
-#box_image2.show()
-
-iou = iou(new_bbox, res["boxes"])
-
-print(iou)
-"""
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -150,11 +92,20 @@ parser.add_argument('--target', type=str, help='Dataset root  dir')
 parser.add_argument('--detections', type=str, help="Saved Detections .pth file")
 parser.add_argument('--anno_path', type=str, help='Path to annotations .xml')
 parser.add_argument('--n_most_conf', type=int, default=2000, help='Number of most confidence predictions to condider for the Error Analysis')
+parser.add_argument('--subset_classes', nargs='+', help="List of classes to consider")
 args = parser.parse_args()
 
-classes = ["__background__", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+voc_classes = ["__background__", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+
+cityscapes_classes = ["__background__ ","person","rider","car","truck","bus","train","motorcycle","bicycle"]
 
 
+classes = voc_classes
+
+if args.subset_classes is not None:
+    sub_set_classes = args.subset_classes
+else:
+    sub_set_classes = classes
 
 detections = torch.load(open(args.detections, 'rb'))
 
@@ -204,7 +155,8 @@ for i in range(len(lines)):
         temp_dict["score"] = detections[i].extra_fields['scores'].numpy()[k]
         temp_dict["iou_gt"] = iou_with_gt[k]
 
-        all_info.append(temp_dict)
+        if temp_dict["label_gt"] in sub_set_classes:
+            all_info.append(temp_dict)
 
 
 
